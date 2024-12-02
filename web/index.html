@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microservice Workflow Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.4.0/backbone-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.5.5/joint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.30.1/min/vs/loader.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.5.5/joint.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            DEFAULT: '#8b5cf6',
+                            foreground: '#ffffff',
+                        },
+                        secondary: {
+                            DEFAULT: '#6b46c1',
+                            foreground: '#ffffff',
+                        },
+                        background: {
+                            DEFAULT: '#1a1a1a',
+                            foreground: '#ffffff',
+                        },
+                        foreground: {
+                            DEFAULT: '#ffffff',
+                            muted: '#a3a3a3',
+                        },
+                        muted: {
+                            DEFAULT: '#3f3f46',
+                            foreground: '#a3a3a3',
+                        },
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-foreground min-h-screen flex flex-col">
+    <header class="p-4 bg-muted">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-semibold">Microservable</h1>
+            <div class="flex space-x-2">
+                <button id="autoLayout" class="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-secondary transition-colors">
+                    Auto Layout
+                </button>
+                <button id="exportJSON" class="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-secondary transition-colors">
+                    Export JSON
+                </button>
+                <button id="validateAll" class="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-secondary transition-colors">
+                    Validate All
+                </button>
+                <button id="deploy" class="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-secondary transition-colors">
+                    Deploy Stack
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow container mx-auto p-4 flex">
+        <div id="toolbox" class="w-64 bg-muted p-4 rounded-md mr-4">
+            <h2 class="text-lg font-semibold mb-4">Toolbox</h2>
+            <div class="space-y-2">
+                <button id="addService" class="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-secondary transition-colors">
+                    Add Service
+                </button>
+                <h3 class="text-sm font-semibold mt-4 mb-2">Communication Channels</h3>
+                <button id="restApi" class="w-full px-4 py-2 rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors">
+                    REST API
+                </button>
+                <button id="grpc" class="w-full px-4 py-2 rounded-md bg-green-500 text-white hover:bg-green-600 transition-colors">
+                    gRPC
+                </button>
+                <button id="messageBroker" class="w-full px-4 py-2 rounded-md bg-yellow-500 text-white hover:bg-yellow-600 transition-colors">
+                    Message Broker
+                </button>
+                <button id="graphql" class="w-full px-4 py-2 rounded-md bg-pink-500 text-white hover:bg-pink-600 transition-colors">
+                    GraphQL
+                </button>
+            </div>
+        </div>
+        <div class="flex-grow flex flex-col">
+            <div id="paper" class="flex-grow border border-muted rounded-md overflow-hidden"></div>
+            <div id="configTabs" class="h-[900px] mt-4 border border-muted rounded-md overflow-hidden">
+                <div class="flex bg-muted">
+                    <div id="editorTabs" class="flex bg-muted"></div>
+                    <button id="addConfigTab" class="px-4 py-2 bg-primary text-primary-foreground hover:bg-secondary transition-colors">
+                        +
+                    </button>
+                </div>
+                <div id="configContent" class="h-full bg-background">
+                    <div id="monacoEditor" class="w-full h-full"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="serviceDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-background p-6 rounded-lg w-96">
+            <h2 class="text-xl font-semibold mb-4">Edit Service</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="serviceName" class="block text-sm font-medium text-foreground-muted">Service Name</label>
+                    <input type="text" id="serviceName" class="mt-1 block w-full rounded-md bg-muted border-transparent focus:border-primary focus:bg-background focus:ring-0">
+                </div>
+                <div>
+                    <label for="serviceDescription" class="block text-sm font-medium text-foreground-muted">Description</label>
+                    <textarea id="serviceDescription" rows="3" class="mt-1 block w-full rounded-md bg-muted border-transparent focus:border-primary focus:bg-background focus:ring-0"></textarea>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button id="cancelServiceEdit" class="px-4 py-2 rounded-md bg-muted text-foreground hover:bg-muted-foreground transition-colors">Cancel</button>
+                <button id="saveServiceEdit" class="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-secondary transition-colors">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="p-4 bg-muted">
+        <div class="container mx-auto text-center text-foreground-muted">
+            &copy; 2023 Microservice Workflow Editor. All rights reserved.
+        </div>
+    </footer>
+
+    <script src="./script/app.js"></script>
+</body>
+</html>
